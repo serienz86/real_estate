@@ -2,6 +2,7 @@
 개인용·저속 수집 전제. 네이버 내부 API는 예고 없이 바뀔 수 있음(첫 실행 로그로 확인)."""
 import re, json, math, time, random, sys, os, datetime as dt
 import requests
+import xml.etree.ElementTree as ET
 from curl_cffi import requests as cr
 
 MIN_HOUSEHOLDS = 1000    # 이 세대수 미만 단지는 건너뜀(요청 수 절감)
@@ -79,6 +80,65 @@ def nearest(sts, la, lo):
     n, d = min(((n, haversine(la, lo, a, b)) for n, a, b in sts), key=lambda x: x[1])
     return n, int(d)
 
+
+MOLIT_URL = "https://apis.data.go.kr/1613000/RTMSDataSvcAptTradeDev/getRTMSDataSvcAptTradeDev"
+PREV_MONTHS = 12   # 직전 매매가를 찾아볼 기간(개월)
+
+def norm(n):
+    return re.sub(r"[\s()\[\]·\-]|아파트|단지", "", n or "")
+
+def molit_deals(key, lawd):
+    """시군구(lawd) 최근 PREV_MONTHS개월 매매 신고분(해제 제외)."""
+    out = []
+    today = dt.datetime.now(KST)
+    y, m = today.year, today.month
+    for _ in range(PREV_MONTHS):
+        ym = f"{y}{m:02d}"; page = 1
+        while True:
+            nap()
+            try:
+                r = requests.get(MOLIT_URL, params=dict(serviceKey=key, LAWD_CD=lawd, DEAL_YMD=ym,
+                                 numOfRows=1000, pageNo=page), timeout=30)
+                root = ET.fromstring(r.content)
+            except Exception as e:
+                print("국토부 API 오류", lawd, ym, e, flush=True); break
+            code = (root.findtext(".//resultCode") or "").strip()
+            if code not in ("000", "00"):
+                print("국토부 API 응답", lawd, ym, code, root.findtext(".//resultMsg"), flush=True); break
+            for it in root.iter("item"):
+                g = lambda k: (it.findtext(k) or "").strip()
+                if g("cdealType") == "O": continue   # 해제(취소) 건 제외
+                try:
+                    out.append(dict(dong=g("umdNm"), apt=norm(g("aptNm")), area=float(g("excluUseAr")),
+                        amt=int(g("dealAmount").replace(",", "")) / 10000,
+                        ymd=f"{int(g('dealYear')):04d}-{int(g('dealMonth')):02d}-{int(g('dealDay')):02d}"))
+                except ValueError:
+                    pass
+            total = int(root.findtext(".//totalCount") or 0)
+            if page * 1000 >= total: break
+            page += 1
+        m -= 1
+        if m == 0: y, m = y - 1, 12
+    return out
+
+def fill_prev(items, key):
+    by = {}
+    for r in items: by.setdefault(r["_lawd"], None)
+    for lawd in by:
+        by[lawd] = molit_deals(key, lawd)
+        print("실거래", lawd, len(by[lawd]), "건", flush=True)
+    hit = 0
+    for r in items:
+        a = norm(r["name"]); cand = []
+        for d in by[r["_lawd"]]:
+            if d["dong"] != r["dong"] or abs(d["area"] - r["_excl"]) > 1.0: continue
+            if d["apt"] == a or (len(a) >= 3 and len(d["apt"]) >= 3 and (a in d["apt"] or d["apt"] in a)):
+                cand.append(d)
+        if cand:
+            last = max(cand, key=lambda d: d["ymd"])
+            r["prev"], r["prev_date"] = round(last["amt"], 2), last["ymd"]; hit += 1
+    print(f"직전 매매가 매칭 {hit}/{len(items)}", flush=True)
+
 def label(sido, gu, cname):
     if "위례" in cname: return "위례"
     if gu.startswith("성남시"): return "성남 " + gu.replace("성남시", "").strip().rstrip("구")
@@ -126,13 +186,21 @@ def main():
                         st, dist = nearest(sts, float(c["latitude"]), float(c["longitude"]))
                         ymd = str(c.get("useApproveYmd") or "")
                         best[key] = dict(region=label("", gname, c["complexName"]),
+                            city=gname[:2] if gname.startswith(("성남","하남")) else "서울",
+                            gu=gname.replace("성남시 ","").strip(),
                             age=(year - int(ymd[:4])) if ymd[:4].isdigit() else None,
-                            name=c["complexName"], py=py, price=price, prev=None,
+                            name=c["complexName"], py=py, price=price, prev=None, prev_date=None, dong=dong["cortarName"],
+                            _excl=float(x.get("area2") or 0), _lawd=gno[:5],
                             units=c.get("totalHouseholdCount"), subway=st, dist_m=dist)
                     if not a.get("isMoreData"): break
                     page += 1
             print(gname, dong["cortarName"], "누적 급매", len(best), flush=True)
     items = sorted(best.values(), key=lambda r: r["price"])
+    key = os.environ.get("MOLIT_KEY", "").strip()
+    if key and items: fill_prev(items, key)
+    else: print("MOLIT_KEY 없음: 직전 매매가는 비워 둡니다", flush=True)
+    for r in items:
+        r.pop("_excl", None); r.pop("_lawd", None)
     out = {"updated": dt.datetime.now(KST).strftime("%Y-%m-%d %H:%M KST"), "items": items}
     if not items: sys.exit("급매 0건: 수집 실패로 보고 data.json을 덮어쓰지 않음")
     json.dump(out, open("data.json", "w", encoding="utf-8"), ensure_ascii=False, indent=1)
