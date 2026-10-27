@@ -23,6 +23,7 @@ table{border-collapse:collapse;width:100%;min-width:700px;font-size:14px}
 th{background:var(--head);padding:9px 6px;font-size:12px;cursor:pointer;white-space:nowrap}
 td{padding:8px 6px;border-bottom:1px solid var(--line);text-align:center}
 td.name{text-align:left;font-weight:600}
+td.name a{color:inherit;text-decoration:underline dotted}
 td.reg{font-weight:700;color:var(--pri)}
 td.price{font-size:17px;font-weight:800;color:var(--pri)}
 .down{color:var(--down)}
@@ -42,10 +43,11 @@ td.price{font-size:17px;font-weight:800;color:var(--pri)}
   </div>
   <div class="tabs" id="tabs"></div>
   <div class="bar">
-    지역 <select id="reg"></select>
-    데이터 주소 <input type="text" id="src" value="data.json">
+    <span>지역</span> <select id="city"></select> <select id="reg"></select>
+    <input type="text" id="src" value="data.json" hidden>
     <span id="upd"></span>
   </div>
+  <div class="tabs" id="bands"></div>
   <div class="msg" id="msg"></div>
   <div class="scroll"><table>
     <thead><tr id="thead"></tr></thead>
@@ -68,7 +70,9 @@ let DATA={updated:"샘플 데이터",items:[
 {region:"용산",age:29,name:"강촌",py:40,price:28.9,prev:31.0,units:1001},
 {region:"강동",age:2,name:"올림픽파크포레온",py:43,price:33.0,prev:36.0,units:12032}
 ]};
-const TABS=[["20평대",20,30],["30평대",30,40],["40평대",40,50],["50평대 이상",50,999]];
+const TABS=[["20평대",20,30],["30평대",30,40],["40평대",40,50]];
+const BANDS=[["전체",0,1e9],["6억 미만",0,6],["6억~10억",6,10],["10억~15억",10,15],["15억 이상",15,1e9]];
+let band=0;
 const COLS=[["region","지역"],["age","연차"],["name","단지명"],["py","평"],["price","호가(억)"],["prev","직전 매매가"],["chg","변동률"],["units","세대수"],["dist_m","지하철 직선거리"]];
 let tab=0,sortKey="price",dir=1;
 const $=id=>document.getElementById(id);
@@ -78,23 +82,43 @@ function fmtDist(r){
   const d=r.dist_m>=1000?(r.dist_m/1000).toFixed(2)+"km":r.dist_m+"m";
   return (r.subway?r.subway+" ":"")+d;
 }
+function cityOf(r){
+  if(r.city)return r.city;
+  const g=r.region||"";
+  if(g.startsWith("성남"))return"성남";
+  if(g.startsWith("하남"))return"하남";
+  if(g==="위례")return"위례";
+  return"서울";
+}
+function guOf(r){return r.gu||(r.region||"").replace(/^성남\s*/,"")}
+function mapLink(r){
+  const q=encodeURIComponent(r.name)+"%20"+encodeURIComponent(guOf(r)||cityOf(r));
+  return `<a href="https://map.naver.com/p/search/${q}" target="_blank" rel="noopener">${r.name}</a>`;
+}
 function chg(r){return r.prev?Math.round((r.price/r.prev-1)*100):null}
 function render(){
   $("tabs").innerHTML=TABS.map((t,i)=>`<button class="tab ${i==tab?"on":""}" data-i="${i}">${t[0]}</button>`).join("");
   document.querySelectorAll(".tab").forEach(b=>b.onclick=()=>{tab=+b.dataset.i;render()});
-  const regs=[...new Set(DATA.items.map(r=>r.region))];
-  const cur=$("reg").value||"전체";
-  $("reg").innerHTML=["전체",...regs].map(x=>`<option ${x==cur?"selected":""}>${x}</option>`).join("");
+  const items=DATA.items;
+  const cities=["전체",...["서울","성남","하남","위례"].filter(c=>items.some(r=>cityOf(r)==c))];
+  const cc=cities.includes($("city").value)?$("city").value:"전체";
+  $("city").innerHTML=cities.map(x=>`<option ${x==cc?"selected":""}>${x}</option>`).join("");
+  const gus=["전체",...new Set(items.filter(r=>cc=="전체"||cityOf(r)==cc).map(guOf))];
+  const cg=gus.includes($("reg").value)?$("reg").value:"전체";
+  $("reg").innerHTML=gus.map(x=>`<option ${x==cg?"selected":""}>${x}</option>`).join("");
+  $("bands").innerHTML=BANDS.map((t,i)=>`<button class="tab ${i==band?"on":""}" data-b="${i}">${t[0]}</button>`).join("");
+  document.querySelectorAll("[data-b]").forEach(b=>b.onclick=()=>{band=+b.dataset.b;render()});
   $("thead").innerHTML=COLS.map(c=>`<th data-k="${c[0]}">${c[1]}${sortKey==c[0]?(dir>0?" ▲":" ▼"):""}</th>`).join("");
   document.querySelectorAll("th").forEach(th=>th.onclick=()=>{const k=th.dataset.k;dir=sortKey==k?-dir:1;sortKey=k;render()});
   const [,lo,hi]=TABS[tab];
-  let rows=DATA.items.filter(r=>r.py>=lo&&r.py<hi&&($("reg").value==="전체"||!$("reg").value||r.region==$("reg").value));
+  const [,pl,ph]=BANDS[band];
+  let rows=items.filter(r=>r.py>=lo&&r.py<hi&&r.price>=pl&&r.price<ph&&(cc=="전체"||cityOf(r)==cc)&&(cg=="전체"||guOf(r)==cg));
   rows=rows.map(r=>({...r,chg:chg(r)}));
   rows.sort((a,b)=>{const x=a[sortKey],y=b[sortKey];
     if(x==null)return 1;if(y==null)return -1;
     return (typeof x=="string"?x.localeCompare(y,"ko"):x-y)*dir});
   $("tbody").innerHTML=rows.length?rows.map(r=>`<tr>
-    <td class="reg">${r.region}</td><td>${r.age}</td><td class="name">${r.name}</td><td>${r.py}</td>
+    <td class="reg">${cityOf(r)} ${guOf(r)}</td><td>${r.age}</td><td class="name">${mapLink(r)}</td><td>${r.py}</td>
     <td class="price">${r.price.toFixed(1)}</td><td>${r.prev?r.prev.toFixed(1):"-"}</td>
     <td class="down">${r.chg==null?"-":r.chg+"%"}</td><td>${r.units?r.units.toLocaleString():"-"}</td>
     <td>${fmtDist(r)}</td></tr>`).join(""):`<tr><td colspan="9" class="empty">해당 평형 데이터가 없습니다.</td></tr>`;
@@ -116,6 +140,7 @@ async function refresh(){
   }
 }
 $("refresh").onclick=refresh;
+$("city").onchange=()=>{$("reg").value="전체";render()};
 $("reg").onchange=render;
 $("pick").onclick=()=>$("file").click();
 $("file").onchange=async e=>{
