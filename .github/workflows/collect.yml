@@ -11,11 +11,11 @@ jobs:
     timeout-minutes: 180
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - run: python -m pip install -r requirements.txt
-      - run: python collect.py
+      - name: Python 환경 준비 (PC에 설치된 최신 파이썬 사용)
+        run: |
+          py -3 -m venv .venv
+          .\.venv\Scripts\python -m pip install -r requirements.txt
+      - run: .\.venv\Scripts\python collect.py
       - name: Commit data.json
         run: |
           git config user.name "gupmae-bot"
