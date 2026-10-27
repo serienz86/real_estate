@@ -1,10 +1,12 @@
 """네이버부동산 급매 호가 수집 -> data.json (서울/성남/하남/위례).
 개인용·저속 수집 전제. 네이버 내부 API는 예고 없이 바뀔 수 있음(첫 실행 로그로 확인)."""
-import re, json, math, time, random, sys, datetime as dt
+import re, json, math, time, random, sys, os, datetime as dt
 import requests
 from curl_cffi import requests as cr
 
-MIN_HOUSEHOLDS = 1,000   # 이 세대수 미만 단지는 건너뜀(요청 수 절감)
+MIN_HOUSEHOLDS = 1000    # 이 세대수 미만 단지는 건너뜀(요청 수 절감)
+TARGET_GU = None         # 예: ["송파구","성남시 수정구","하남시"]  None이면 전체
+TIME_LIMIT_MIN = 150     # 이 시간이 지나면 거기까지 모은 결과를 저장하고 종료
 SLEEP = (0.7, 1.4)       # 요청 간 대기(초)
 BASE = "https://new.land.naver.com"
 KST = dt.timezone(dt.timedelta(hours=9))
@@ -46,23 +48,34 @@ def haversine(la1, lo1, la2, lo2):
     return 2 * 6371000 * math.asin(math.sqrt(a))
 
 def stations():
+    """역 좌표는 stations.json에 캐시(30일). 못 받아도 거리 없이 계속 진행."""
+    try:
+        if time.time() - os.path.getmtime("stations.json") < 30 * 86400:
+            return [tuple(x) for x in json.load(open("stations.json", encoding="utf-8"))]
+    except OSError:
+        pass
     q = """[out:json][timeout:60];(
       node["railway"="station"]["station"="subway"](37.35,126.75,37.75,127.30);
       node["railway"="station"]["subway"="yes"](37.35,126.75,37.75,127.30);
     );out;"""
     hdr = {"User-Agent": "gupmae-personal/1.0 (personal use)", "Accept": "application/json"}
-    last = None
-    for url in ("https://overpass-api.de/api/interpreter",
-                "https://overpass.kumi.systems/api/interpreter"):
-        try:
-            r = requests.post(url, data={"data": q}, headers=hdr, timeout=90)
-            r.raise_for_status()
-            return [(e["tags"].get("name", "?"), e["lat"], e["lon"]) for e in r.json()["elements"]]
-        except Exception as e:
-            last = e; print("Overpass 실패", url, e)
-    raise last
+    for rnd in range(3):
+        for url in ("https://overpass-api.de/api/interpreter",
+                    "https://overpass.kumi.systems/api/interpreter"):
+            try:
+                r = requests.post(url, data={"data": q}, headers=hdr, timeout=60)
+                r.raise_for_status()
+                st = [(e["tags"].get("name", "?"), e["lat"], e["lon"]) for e in r.json()["elements"]]
+                json.dump(st, open("stations.json", "w", encoding="utf-8"), ensure_ascii=False)
+                return st
+            except Exception as e:
+                print("Overpass 실패", url, e, flush=True)
+        time.sleep(30 * (rnd + 1))
+    print("역 좌표를 못 받아 지하철 거리 없이 진행합니다", flush=True)
+    return []
 
 def nearest(sts, la, lo):
+    if not sts: return None, None
     n, d = min(((n, haversine(la, lo, a, b)) for n, a, b in sts), key=lambda x: x[1])
     return n, int(d)
 
@@ -80,14 +93,19 @@ def main():
     for sido in ("서울시", "경기도"):
         if sido not in top: sys.exit(f"시도 목록에 {sido} 없음: {list(top)}")
         for g in regions(s, top[sido]):
-            if sido == "서울시" or g["cortarName"].startswith(("성남시", "하남시")):
+            ok = sido == "서울시" or g["cortarName"].startswith(("성남시", "하남시"))
+            if ok and (TARGET_GU is None or g["cortarName"] in TARGET_GU):
                 guList.append((g["cortarName"], g["cortarNo"]))
     print("구/시", len(guList))
 
     best, seen = {}, set()
     year = dt.datetime.now(KST).year
+    t0 = time.time(); stop = False
     for gname, gno in guList:
+        if stop: break
         for dong in regions(s, gno):
+            if time.time() - t0 > TIME_LIMIT_MIN * 60:
+                print("시간 제한 도달: 지금까지 결과를 저장합니다", flush=True); stop = True; break
             d = get(s, "/api/regions/complexes", cortarNo=dong["cortarNo"], realEstateType="APT", order="")
             for c in (d or {}).get("complexList", []):
                 no = c["complexNo"]
