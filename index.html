@@ -119,7 +119,7 @@ function render(){
     return (typeof x=="string"?x.localeCompare(y,"ko"):x-y)*dir});
   $("tbody").innerHTML=rows.length?rows.map(r=>`<tr>
     <td class="reg">${cityOf(r)} ${guOf(r)}</td><td>${r.age}</td><td class="name">${mapLink(r)}</td><td>${r.py}</td>
-    <td class="price">${r.price.toFixed(1)}</td><td>${r.prev?r.prev.toFixed(1):"-"}</td>
+    <td class="price">${r.price.toFixed(1)}</td><td title="${r.prev_date||""}">${r.prev?r.prev.toFixed(1):"-"}</td>
     <td class="down">${r.chg==null?"-":r.chg+"%"}</td><td>${r.units?r.units.toLocaleString():"-"}</td>
     <td>${fmtDist(r)}</td></tr>`).join(""):`<tr><td colspan="9" class="empty">해당 평형 데이터가 없습니다.</td></tr>`;
   $("upd").textContent="갱신: "+DATA.updated;
