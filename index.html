@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>급매 선별표</title>
+<style>
+:root{--bg:#f3f6f8;--card:#fff;--tx:#1b2a2f;--sub:#6b7b80;--pri:#0f7f78;--line:#cfe0e3;--head:#e4edf0;--down:#1a6fd1}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1618;--card:#162226;--tx:#e6f0f2;--sub:#8fa3a8;--pri:#3cc4ba;--line:#27393d;--head:#1d2e33;--down:#6aa8ff}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font-family:system-ui,-apple-system,"Malgun Gothic",sans-serif;padding:16px}
+.wrap{max-width:960px;margin:0 auto;background:var(--card);border-radius:20px;padding:20px;box-shadow:0 2px 12px #0002}
+h1{margin:0;font-size:28px;color:var(--pri)}
+.top{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.tabs{display:flex;gap:6px;margin:14px 0 8px;flex-wrap:wrap}
+.tab,button,select{font:inherit;border:1px solid var(--line);background:var(--head);color:var(--tx);padding:8px 14px;border-radius:10px;cursor:pointer}
+.tab.on{background:var(--pri);color:#fff;border-color:var(--pri);font-weight:700}
+button.pri{background:var(--pri);color:#fff;border-color:var(--pri)}
+.bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px;font-size:13px;color:var(--sub)}
+.bar input[type=text]{font:inherit;padding:7px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--tx);width:200px}
+.scroll{overflow-x:auto}
+table{border-collapse:collapse;width:100%;min-width:700px;font-size:14px}
+th{background:var(--head);padding:9px 6px;font-size:12px;cursor:pointer;white-space:nowrap}
+td{padding:8px 6px;border-bottom:1px solid var(--line);text-align:center}
+td.name{text-align:left;font-weight:600}
+td.reg{font-weight:700;color:var(--pri)}
+td.price{font-size:17px;font-weight:800;color:var(--pri)}
+.down{color:var(--down)}
+.msg{padding:10px;border-radius:10px;background:var(--head);font-size:13px;margin:8px 0}
+.empty{padding:30px;text-align:center;color:var(--sub)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <h1>급매 선별 <small id="ttl" style="font-size:15px"></small></h1>
+    <div>
+      <button class="pri" id="refresh">↻ 리프레시</button>
+      <button id="pick">JSON 불러오기</button>
+      <input type="file" id="file" accept=".json" hidden>
+    </div>
+  </div>
+  <div class="tabs" id="tabs"></div>
+  <div class="bar">
+    지역 <select id="reg"></select>
+    데이터 주소 <input type="text" id="src" value="data.json">
+    <span id="upd"></span>
+  </div>
+  <div class="msg" id="msg"></div>
+  <div class="scroll"><table>
+    <thead><tr id="thead"></tr></thead>
+    <tbody id="tbody"></tbody>
+  </table></div>
+  <p style="font-size:12px;color:var(--sub)">호가 = 네이버부동산 최저 호가(억) · 평 = 공급면적 · 변동률 = 직전 매매가 대비 · 거리 = 가장 가까운 지하철역까지 직선거리</p>
+</div>
+<script>
+// 샘플 데이터(공유받은 이미지 일부). 직전매매가는 이미지의 '전고점' 값, 지하철 정보는 없음 → '-' 표시.
+// 실제 데이터는 data.json 로 교체: {"updated":"...","items":[{region,age,name,py,price,prev,units,subway,dist_m}]}
+let DATA={updated:"샘플 데이터",items:[
+{region:"강북",age:24,name:"해모로",py:24,price:5.1,prev:5.5,units:430},
+{region:"노원",age:28,name:"불암현대",py:24,price:5.5,prev:5.7,units:826},
+{region:"관악",age:31,name:"건영3차",py:23,price:6.5,prev:6.6,units:783},
+{region:"도봉",age:41,name:"한양1차",py:29,price:5.8,prev:8.0,units:824},
+{region:"서대문",age:28,name:"신촌럭키",py:24,price:12.5,prev:13.0,units:855},
+{region:"송파",age:6,name:"송파시그니처롯데캐슬",py:25,price:18.0,prev:18.7,units:1945},
+{region:"금천",age:28,name:"삼익",py:42,price:6.3,prev:7.0,units:786},
+{region:"노원",age:28,name:"양지대림2차",py:43,price:11.3,prev:11.5,units:652},
+{region:"용산",age:29,name:"강촌",py:40,price:28.9,prev:31.0,units:1001},
+{region:"강동",age:2,name:"올림픽파크포레온",py:43,price:33.0,prev:36.0,units:12032}
+]};
+const TABS=[["20평대",20,30],["30평대",30,40],["40평대",40,50],["50평대 이상",50,999]];
+const COLS=[["region","지역"],["age","연차"],["name","단지명"],["py","평"],["price","호가(억)"],["prev","직전 매매가"],["chg","변동률"],["units","세대수"],["dist_m","지하철 직선거리"]];
+let tab=0,sortKey="price",dir=1;
+const $=id=>document.getElementById(id);
+
+function fmtDist(r){
+  if(r.dist_m==null)return"-";
+  const d=r.dist_m>=1000?(r.dist_m/1000).toFixed(2)+"km":r.dist_m+"m";
+  return (r.subway?r.subway+" ":"")+d;
+}
+function chg(r){return r.prev?Math.round((r.price/r.prev-1)*100):null}
+function render(){
+  $("tabs").innerHTML=TABS.map((t,i)=>`<button class="tab ${i==tab?"on":""}" data-i="${i}">${t[0]}</button>`).join("");
+  document.querySelectorAll(".tab").forEach(b=>b.onclick=()=>{tab=+b.dataset.i;render()});
+  const regs=[...new Set(DATA.items.map(r=>r.region))];
+  const cur=$("reg").value||"전체";
+  $("reg").innerHTML=["전체",...regs].map(x=>`<option ${x==cur?"selected":""}>${x}</option>`).join("");
+  $("thead").innerHTML=COLS.map(c=>`<th data-k="${c[0]}">${c[1]}${sortKey==c[0]?(dir>0?" ▲":" ▼"):""}</th>`).join("");
+  document.querySelectorAll("th").forEach(th=>th.onclick=()=>{const k=th.dataset.k;dir=sortKey==k?-dir:1;sortKey=k;render()});
+  const [,lo,hi]=TABS[tab];
+  let rows=DATA.items.filter(r=>r.py>=lo&&r.py<hi&&($("reg").value==="전체"||!$("reg").value||r.region==$("reg").value));
+  rows=rows.map(r=>({...r,chg:chg(r)}));
+  rows.sort((a,b)=>{const x=a[sortKey],y=b[sortKey];
+    if(x==null)return 1;if(y==null)return -1;
+    return (typeof x=="string"?x.localeCompare(y,"ko"):x-y)*dir});
+  $("tbody").innerHTML=rows.length?rows.map(r=>`<tr>
+    <td class="reg">${r.region}</td><td>${r.age}</td><td class="name">${r.name}</td><td>${r.py}</td>
+    <td class="price">${r.price.toFixed(1)}</td><td>${r.prev?r.prev.toFixed(1):"-"}</td>
+    <td class="down">${r.chg==null?"-":r.chg+"%"}</td><td>${r.units?r.units.toLocaleString():"-"}</td>
+    <td>${fmtDist(r)}</td></tr>`).join(""):`<tr><td colspan="9" class="empty">해당 평형 데이터가 없습니다.</td></tr>`;
+  $("upd").textContent="갱신: "+DATA.updated;
+}
+function setData(d){
+  if(!d||!Array.isArray(d.items))throw new Error("형식 오류: items 배열이 필요합니다");
+  DATA=d;render();
+}
+async function refresh(){
+  $("msg").textContent="불러오는 중…";
+  try{
+    const res=await fetch($("src").value+(($("src").value.includes("?")?"&":"?")+"t="+Date.now()),{cache:"no-store"});
+    if(!res.ok)throw new Error("HTTP "+res.status);
+    setData(await res.json());
+    $("msg").textContent="리프레시 완료 ("+DATA.items.length+"건)";
+  }catch(e){
+    $("msg").textContent="리프레시 실패: "+e.message+" — 브라우저는 보안상 로컬 파일(file://)에서 data.json을 못 읽을 수 있어요. 'JSON 불러오기'를 쓰거나 간단한 웹서버로 열어주세요.";
+  }
+}
+$("refresh").onclick=refresh;
+$("reg").onchange=render;
+$("pick").onclick=()=>$("file").click();
+$("file").onchange=async e=>{
+  try{setData(JSON.parse(await e.target.files[0].text()));$("msg").textContent="파일에서 불러오기 완료"}
+  catch(err){$("msg").textContent="불러오기 실패: "+err.message}
+};
+$("msg").textContent="현재 표시 중인 건 샘플 데이터입니다. 실제 호가 데이터(data.json)를 연결하면 리프레시로 갱신돼요.";
+render();
+</script>
+</body>
+</html>
