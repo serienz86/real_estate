@@ -4,7 +4,7 @@ import re, json, math, time, random, sys, datetime as dt
 import requests
 from curl_cffi import requests as cr
 
-MIN_HOUSEHOLDS = 300     # 이 세대수 미만 단지는 건너뜀(요청 수 절감)
+MIN_HOUSEHOLDS = 1,000   # 이 세대수 미만 단지는 건너뜀(요청 수 절감)
 SLEEP = (0.7, 1.4)       # 요청 간 대기(초)
 BASE = "https://new.land.naver.com"
 KST = dt.timezone(dt.timedelta(hours=9))
