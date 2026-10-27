@@ -16,6 +16,8 @@ jobs:
           py -3 -m venv .venv
           .\.venv\Scripts\python -m pip install -r requirements.txt
       - run: .\.venv\Scripts\python collect.py
+        env:
+          MOLIT_KEY: ${{ secrets.MOLIT_KEY }}
       - name: Commit data.json
         run: |
           git config user.name "gupmae-bot"
