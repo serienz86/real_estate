@@ -50,9 +50,17 @@ def stations():
       node["railway"="station"]["station"="subway"](37.35,126.75,37.75,127.30);
       node["railway"="station"]["subway"="yes"](37.35,126.75,37.75,127.30);
     );out;"""
-    r = requests.post("https://overpass-api.de/api/interpreter", data={"data": q}, timeout=90)
-    r.raise_for_status()
-    return [(e["tags"].get("name", "?"), e["lat"], e["lon"]) for e in r.json()["elements"]]
+    hdr = {"User-Agent": "gupmae-personal/1.0 (personal use)", "Accept": "application/json"}
+    last = None
+    for url in ("https://overpass-api.de/api/interpreter",
+                "https://overpass.kumi.systems/api/interpreter"):
+        try:
+            r = requests.post(url, data={"data": q}, headers=hdr, timeout=90)
+            r.raise_for_status()
+            return [(e["tags"].get("name", "?"), e["lat"], e["lon"]) for e in r.json()["elements"]]
+        except Exception as e:
+            last = e; print("Overpass 실패", url, e)
+    raise last
 
 def nearest(sts, la, lo):
     n, d = min(((n, haversine(la, lo, a, b)) for n, a, b in sts), key=lambda x: x[1])
