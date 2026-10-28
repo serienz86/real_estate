@@ -5,149 +5,237 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>급매 선별표</title>
 <style>
-:root{--bg:#f3f6f8;--card:#fff;--tx:#1b2a2f;--sub:#6b7b80;--pri:#0f7f78;--line:#cfe0e3;--head:#e4edf0;--down:#1a6fd1}
-@media(prefers-color-scheme:dark){:root{--bg:#0f1618;--card:#162226;--tx:#e6f0f2;--sub:#8fa3a8;--pri:#3cc4ba;--line:#27393d;--head:#1d2e33;--down:#6aa8ff}}
+:root{--bg:#f3f6f8;--card:#fff;--tx:#1b2a2f;--sub:#6b7b80;--pri:#0f7f78;--line:#cfe0e3;--head:#e4edf0;--down:#1a6fd1;--up:#d4382c}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1618;--card:#162226;--tx:#e6f0f2;--sub:#8fa3a8;--pri:#3cc4ba;--line:#27393d;--head:#1d2e33;--down:#6aa8ff;--up:#ff7b6e}}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--tx);font-family:system-ui,-apple-system,"Malgun Gothic",sans-serif;padding:16px}
-.wrap{max-width:960px;margin:0 auto;background:var(--card);border-radius:20px;padding:20px;box-shadow:0 2px 12px #0002}
-h1{margin:0;font-size:28px;color:var(--pri)}
+.wrap{max-width:1000px;margin:0 auto;background:var(--card);border-radius:20px;padding:20px;box-shadow:0 2px 12px #0002}
+h1{margin:0;font-size:26px;color:var(--pri)}
 .top{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
-.tabs{display:flex;gap:6px;margin:14px 0 8px;flex-wrap:wrap}
-.tab,button,select{font:inherit;border:1px solid var(--line);background:var(--head);color:var(--tx);padding:8px 14px;border-radius:10px;cursor:pointer}
+.tabs{display:flex;gap:6px;margin:10px 0 4px;flex-wrap:wrap}
+.tab,button,select{font:inherit;border:1px solid var(--line);background:var(--head);color:var(--tx);padding:7px 12px;border-radius:10px;cursor:pointer}
 .tab.on{background:var(--pri);color:#fff;border-color:var(--pri);font-weight:700}
 button.pri{background:var(--pri);color:#fff;border-color:var(--pri)}
-.bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px;font-size:13px;color:var(--sub)}
-.bar input[type=text]{font:inherit;padding:7px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--tx);width:200px}
+.bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0;font-size:13px;color:var(--sub)}
 .scroll{overflow-x:auto}
-table{border-collapse:collapse;width:100%;min-width:700px;font-size:14px}
+table{border-collapse:collapse;width:100%;min-width:760px;font-size:14px}
 th{background:var(--head);padding:9px 6px;font-size:12px;cursor:pointer;white-space:nowrap}
 td{padding:8px 6px;border-bottom:1px solid var(--line);text-align:center}
-td.name{text-align:left;font-weight:600}
-td.name a{color:inherit;text-decoration:underline dotted}
-td.reg{font-weight:700;color:var(--pri)}
-td.price{font-size:17px;font-weight:800;color:var(--pri)}
-.down{color:var(--down)}
+td.name{text-align:left;font-weight:600}td.name a{color:inherit;text-decoration:underline dotted}
+td.reg{font-weight:700;color:var(--pri)}td.price{font-size:17px;font-weight:800;color:var(--pri)}
+.down{color:var(--down)}.up{color:var(--up)}
 .msg{padding:10px;border-radius:10px;background:var(--head);font-size:13px;margin:8px 0}
+.note{font-size:12px;color:var(--sub);margin:10px 0 0;line-height:1.5}
 .empty{padding:30px;text-align:center;color:var(--sub)}
+.chip{border-width:2px;font-size:13px;padding:5px 10px}
+svg text{fill:var(--sub);font-size:11px}
 </style>
 </head>
 <body>
 <div class="wrap">
   <div class="top">
-    <h1>급매 선별 <small id="ttl" style="font-size:15px"></small></h1>
+    <h1>급매 선별</h1>
     <div>
+      <button class="tab on" data-m="list">목록</button>
+      <button class="tab" data-m="gone">소멸·거래</button>
+      <button class="tab" data-m="trend">추이</button>
       <button class="pri" id="refresh">↻ 리프레시</button>
       <button id="pick">JSON 불러오기</button>
       <input type="file" id="file" accept=".json" hidden>
     </div>
   </div>
-  <div class="tabs" id="tabs"></div>
-  <div class="bar">
-    <span>지역</span> <select id="city"></select> <select id="reg"></select>
-    <input type="text" id="src" value="data.json" hidden>
-    <span id="upd"></span>
+  <div id="filters">
+    <div class="bar"><span>지역</span><select id="city"></select><select id="reg"></select><span id="upd"></span>
+      <input type="text" id="src" value="data.json" hidden></div>
+    <div class="tabs" id="tabs"></div>
+    <div class="tabs" id="bands"></div>
+    <div class="tabs" id="extra"></div>
   </div>
-  <div class="tabs" id="bands"></div>
   <div class="msg" id="msg"></div>
-  <div class="scroll"><table>
-    <thead><tr id="thead"></tr></thead>
-    <tbody id="tbody"></tbody>
-  </table></div>
-  <p style="font-size:12px;color:var(--sub)">호가 = 네이버부동산 최저 호가(억) · 평 = 공급면적 · 변동률 = 직전 매매가 대비 · 거리 = 가장 가까운 지하철역까지 직선거리</p>
+  <div class="scroll" id="vtable"><table><thead><tr id="thead"></tr></thead><tbody id="tbody"></tbody></table></div>
+  <div id="vtrend" hidden></div>
+  <p class="note" id="note"></p>
 </div>
 <script>
-// 샘플 데이터(공유받은 이미지 일부). 직전매매가는 이미지의 '전고점' 값, 지하철 정보는 없음 → '-' 표시.
-// 실제 데이터는 data.json 로 교체: {"updated":"...","items":[{region,age,name,py,price,prev,units,subway,dist_m}]}
-let DATA={updated:"샘플 데이터",items:[
-{region:"강북",age:24,name:"해모로",py:24,price:5.1,prev:5.5,units:430},
-{region:"노원",age:28,name:"불암현대",py:24,price:5.5,prev:5.7,units:826},
-{region:"관악",age:31,name:"건영3차",py:23,price:6.5,prev:6.6,units:783},
-{region:"도봉",age:41,name:"한양1차",py:29,price:5.8,prev:8.0,units:824},
-{region:"서대문",age:28,name:"신촌럭키",py:24,price:12.5,prev:13.0,units:855},
-{region:"송파",age:6,name:"송파시그니처롯데캐슬",py:25,price:18.0,prev:18.7,units:1945},
-{region:"금천",age:28,name:"삼익",py:42,price:6.3,prev:7.0,units:786},
-{region:"노원",age:28,name:"양지대림2차",py:43,price:11.3,prev:11.5,units:652},
-{region:"용산",age:29,name:"강촌",py:40,price:28.9,prev:31.0,units:1001},
-{region:"강동",age:2,name:"올림픽파크포레온",py:43,price:33.0,prev:36.0,units:12032}
-]};
+// 샘플 데이터 (실제 data.json 이 읽히면 대체됩니다)
+let DATA={updated:"2026-10-30 샘플",items:[
+{region:"노원",city:"서울",gu:"노원구",age:28,name:"불암현대",py:24,price:5.5,prev:5.7,units:826,n:2,fv:0,first_seen:"2026-10-24",price0:5.8,ph:[["2026-10-24",5.8],["2026-10-28",5.5]]},
+{region:"관악",city:"서울",gu:"관악구",age:31,name:"건영3차",py:23,price:6.5,prev:6.6,units:783,n:1,fv:1,first_seen:"2026-10-29",price0:6.5,ph:[["2026-10-29",6.5]]}],
+gone:[{region:"노원",city:"서울",gu:"노원구",name:"상계주공2단지",py:24,floor:"7/15",fv:0,first_seen:"2026-10-10",gone_date:"2026-10-25",price0:7.2,price:7.0,sold:{ymd:"2026-10-27",amt:6.9}}]};
+const $=id=>document.getElementById(id);
 const TABS=[["20평대",20,30],["30평대",30,40],["40평대",40,50]];
 const BANDS=[["전체",0,1e9],["6억 미만",0,6],["6억~10억",6,10],["10억~15억",10,15],["15억 이상",15,1e9]];
-let band=0;
-const COLS=[["region","지역"],["age","연차"],["name","단지명"],["py","평"],["price","호가(억)"],["prev","직전 매매가"],["chg","변동률"],["units","세대수"],["dist_m","지하철 직선거리"]];
-let tab=0,sortKey="price",dir=1;
-const $=id=>document.getElementById(id);
+const CHG=[["all","변동 전체"],["down","호가 인하"],["up","호가 인상"],["recent","최근 7일 변동"]];
+const SOLD=[["all","전체"],["yes","거래 추정"],["no","미확인"]];
+const COLS={
+ list:[["region","지역"],["age","연차"],["name","단지명"],["py","평"],["price","호가(억)"],["prev","직전 매매가"],["chg","변동률"],["first_seen","최초 포착"],["dpct","호가 변동"],["n","급매 수"],["units","세대수"],["dist_m","지하철 직선거리"]],
+ gone:[["region","지역"],["name","단지명"],["py","평"],["floor","층"],["price0","최초 호가"],["price","마지막 호가"],["days","게시 일수"],["gone_date","소멸일"],["soldamt","실거래 대조"]]};
+const NOTE={
+ list:"※ 같은 호실 판별의 한계: 층이 ‘저/중/고’처럼 뭉뚱그려 표시된 매물은 같은 단지·동·면적의 다른 호실과 합쳐질 수 있어요. 이런 매물(⚠)은 최초 포착일과 호가 변동이 부정확할 수 있습니다. 급매 수 = 같은 단지·평형의 급매 호실 수. 호가 변동 = 최초 포착 호가 대비 현재 호가. 거리 = 가장 가까운 지하철역까지 직선거리.",
+ gone:"※ 소멸은 ‘매매 완료’가 아니라 매물이 내려갔거나 급매 표시가 빠진 것입니다. 실거래 대조는 국토부 신고 자료를 단지·동·전용면적·층·계약일(최초 포착일 이후)로 맞춰 본 추정이에요. 신고는 계약 후 최대 30일 늦게 올라오고, 층이 불명확한(⚠) 매물은 대조할 수 없습니다.",
+ trend:"※ 스캔한 단지 범위가 같을 때만 비교가 정확해요(⚠ = 범위가 달라짐). 소멸은 매매 완료가 아닙니다. 주·월 단위는 신규·소멸·인하는 합계, 나머지는 기간 마지막 날 값입니다."};
+let mode="list",tab=0,band=0,chgF="all",soldF="all",cc="전체",cg="전체",DAILY=null;
+const S={list:{k:"price",d:1},gone:{k:"gone_date",d:-1}};
+const T={metric:"m",gran:"d",sel:null};
 
-function fmtDist(r){
-  if(r.dist_m==null)return"-";
-  const d=r.dist_m>=1000?(r.dist_m/1000).toFixed(2)+"km":r.dist_m+"m";
-  return (r.subway?r.subway+" ":"")+d;
-}
-function cityOf(r){
-  if(r.city)return r.city;
-  const g=r.region||"";
-  if(g.startsWith("성남"))return"성남";
-  if(g.startsWith("하남"))return"하남";
-  if(g==="위례")return"위례";
-  return"서울";
-}
-function guOf(r){return r.gu||(r.region||"").replace(/^성남\s*/,"")}
-function mapLink(r){
-  const q=encodeURIComponent(r.name)+"%20"+encodeURIComponent(guOf(r)||cityOf(r));
-  return `<a href="https://map.naver.com/p/search/${q}" target="_blank" rel="noopener">${r.name}</a>`;
-}
-function chg(r){return r.prev?Math.round((r.price/r.prev-1)*100):null}
+const cityOf=r=>r.city||((r.region||"").startsWith("성남")?"성남":(r.region||"").startsWith("하남")?"하남":r.region==="위례"?"위례":"서울");
+const guOf=r=>r.gu||(r.region||"").replace(/^성남\s*/,"");
+const dayDiff=(a,b)=>Math.round((new Date(b)-new Date(a))/864e5);
+const sg=v=>v==null?"-":(v>0?"+":"")+v;
+function mapLink(r){return `<a href="https://map.naver.com/p/search/${encodeURIComponent(r.name)}%20${encodeURIComponent(guOf(r)||cityOf(r))}" target="_blank" rel="noopener">${r.name}</a>`}
+const chgPct=r=>r.prev?Math.round((r.price/r.prev-1)*100):null;
+const dist=r=>r.dist_m==null?"-":(r.subway?r.subway+" ":"")+(r.dist_m>=1000?(r.dist_m/1000).toFixed(2)+"km":r.dist_m+"m");
+
+function src(){return mode==="gone"?(DATA.gone||[]):(DATA.items||[])}
+function sorted(rows){const s=S[mode];return rows.sort((a,b)=>{const x=a[s.k],y=b[s.k];if(x==null)return 1;if(y==null)return -1;return(typeof x=="string"?x.localeCompare(y,"ko"):x-y)*s.d})}
+function btns(list,cur,attr){return list.map(t=>`<button class="tab ${t[0]==cur?"on":""}" data-${attr}="${t[0]}">${t[1]}</button>`).join("")}
+
 function render(){
-  $("tabs").innerHTML=TABS.map((t,i)=>`<button class="tab ${i==tab?"on":""}" data-i="${i}">${t[0]}</button>`).join("");
-  document.querySelectorAll(".tab").forEach(b=>b.onclick=()=>{tab=+b.dataset.i;render()});
-  const items=DATA.items;
-  const cities=["전체",...["서울","성남","하남","위례"].filter(c=>items.some(r=>cityOf(r)==c))];
-  const cc=cities.includes($("city").value)?$("city").value:"전체";
+  document.querySelectorAll("[data-m]").forEach(b=>b.classList.toggle("on",b.dataset.m===mode));
+  $("note").textContent=NOTE[mode];
+  const tr=mode==="trend";
+  $("filters").hidden=tr;$("vtable").hidden=tr;$("vtrend").hidden=!tr;
+  if(tr){renderTrend();return}
+  const rows0=src();
+  const cities=["전체",...["서울","성남","하남","위례"].filter(c=>rows0.some(r=>cityOf(r)==c))];
+  cc=cities.includes(cc)?cc:"전체";
   $("city").innerHTML=cities.map(x=>`<option ${x==cc?"selected":""}>${x}</option>`).join("");
-  const gus=["전체",...new Set(items.filter(r=>cc=="전체"||cityOf(r)==cc).map(guOf))];
-  const cg=gus.includes($("reg").value)?$("reg").value:"전체";
+  const gus=["전체",...new Set(rows0.filter(r=>cc=="전체"||cityOf(r)==cc).map(guOf))];
+  cg=gus.includes(cg)?cg:"전체";
   $("reg").innerHTML=gus.map(x=>`<option ${x==cg?"selected":""}>${x}</option>`).join("");
-  $("bands").innerHTML=BANDS.map((t,i)=>`<button class="tab ${i==band?"on":""}" data-b="${i}">${t[0]}</button>`).join("");
-  document.querySelectorAll("[data-b]").forEach(b=>b.onclick=()=>{band=+b.dataset.b;render()});
-  $("thead").innerHTML=COLS.map(c=>`<th data-k="${c[0]}">${c[1]}${sortKey==c[0]?(dir>0?" ▲":" ▼"):""}</th>`).join("");
-  document.querySelectorAll("th").forEach(th=>th.onclick=()=>{const k=th.dataset.k;dir=sortKey==k?-dir:1;sortKey=k;render()});
-  const [,lo,hi]=TABS[tab];
-  const [,pl,ph]=BANDS[band];
-  let rows=items.filter(r=>r.py>=lo&&r.py<hi&&r.price>=pl&&r.price<ph&&(cc=="전체"||cityOf(r)==cc)&&(cg=="전체"||guOf(r)==cg));
-  rows=rows.map(r=>({...r,chg:chg(r)}));
-  rows.sort((a,b)=>{const x=a[sortKey],y=b[sortKey];
-    if(x==null)return 1;if(y==null)return -1;
-    return (typeof x=="string"?x.localeCompare(y,"ko"):x-y)*dir});
-  $("tbody").innerHTML=rows.length?rows.map(r=>`<tr>
-    <td class="reg">${cityOf(r)} ${guOf(r)}</td><td>${r.age}</td><td class="name">${mapLink(r)}</td><td>${r.py}</td>
-    <td class="price">${r.price.toFixed(1)}</td><td title="${r.prev_date||""}">${r.prev?r.prev.toFixed(1):"-"}</td>
-    <td class="down">${r.chg==null?"-":r.chg+"%"}</td><td>${r.units?r.units.toLocaleString():"-"}</td>
-    <td>${fmtDist(r)}</td></tr>`).join(""):`<tr><td colspan="9" class="empty">해당 평형 데이터가 없습니다.</td></tr>`;
+  $("tabs").innerHTML=btns(TABS.map((t,i)=>[i,t[0]]),tab,"i");
+  $("bands").innerHTML=btns(BANDS.map((t,i)=>[i,t[0]]),band,"b");
+  $("extra").innerHTML=mode==="list"?btns(CHG,chgF,"c"):btns(SOLD,soldF,"s");
+  const [,lo,hi]=TABS[tab],[,pl,ph]=BANDS[band],upd=(DATA.updated||"").slice(0,10);
+  let rows=rows0.filter(r=>r.py>=lo&&r.py<hi&&r.price>=pl&&r.price<ph&&(cc=="전체"||cityOf(r)==cc)&&(cg=="전체"||guOf(r)==cg));
+  if(mode==="list"){
+    rows=rows.map(r=>({...r,chg:chgPct(r),dpct:r.price0?Math.round((r.price/r.price0-1)*1000)/10:null,
+      lastch:r.ph&&r.ph.length>1?r.ph[r.ph.length-1][0]:null}))
+     .filter(r=>chgF=="all"||(chgF=="down"&&r.dpct<0)||(chgF=="up"&&r.dpct>0)||(chgF=="recent"&&r.lastch&&dayDiff(r.lastch,upd)<=7));
+  }else{
+    rows=rows.map(r=>({...r,days:dayDiff(r.first_seen,r.gone_date),soldamt:r.sold?r.sold.amt:null}))
+     .filter(r=>soldF=="all"||(soldF=="yes"&&r.sold)||(soldF=="no"&&!r.sold));
+  }
+  const cols=COLS[mode],s=S[mode];
+  $("thead").innerHTML=cols.map(c=>`<th data-k="${c[0]}">${c[1]}${s.k==c[0]?(s.d>0?" ▲":" ▼"):""}</th>`).join("");
+  sorted(rows);
+  $("tbody").innerHTML=rows.length?rows.map(mode==="list"?rowList:rowGone).join(""):`<tr><td colspan="${cols.length}" class="empty">조건에 맞는 매물이 없습니다.</td></tr>`;
   $("upd").textContent="갱신: "+DATA.updated;
 }
-function setData(d){
-  if(!d||!Array.isArray(d.items))throw new Error("형식 오류: items 배열이 필요합니다");
-  DATA=d;render();
+function rowList(r){
+  const hist=(r.ph||[]).map(p=>p[0]+" "+p[1].toFixed(1)).join(" → ");
+  const first=r.first_seen?r.first_seen.slice(5)+" ("+Math.max(0,dayDiff(r.first_seen,DATA.updated.slice(0,10)))+"일)"+(r.fv?` <span title="층이 불명확해 다른 호실과 합쳐졌을 수 있어요">⚠</span>`:""):"-";
+  const dl=!r.price0||r.dpct==null||r.dpct===0?"-":r.price0.toFixed(1)+"→"+r.price.toFixed(1)+" ("+r.dpct+"%)";
+  return `<tr><td class="reg">${cityOf(r)} ${guOf(r)}</td><td>${r.age??"-"}</td><td class="name">${mapLink(r)}</td><td>${r.py}</td>
+  <td class="price">${r.price.toFixed(1)}</td><td title="${r.prev_date||""}">${r.prev?r.prev.toFixed(1):"-"}</td>
+  <td class="down">${r.chg==null?"-":r.chg+"%"}</td><td title="${hist}">${first}</td>
+  <td class="${r.dpct<0?"down":r.dpct>0?"up":""}" title="${r.relists?"재등록 "+r.relists+"회":""}">${dl}</td>
+  <td>${r.n||"-"}</td><td>${r.units?r.units.toLocaleString():"-"}</td><td>${dist(r)}</td></tr>`;
 }
+function rowGone(r){
+  const sold=r.sold?`${r.sold.ymd.slice(5)} · ${r.sold.amt.toFixed(1)}억 <small class="${r.sold.amt<r.price?"down":"up"}">(${sg(Math.round((r.sold.amt/r.price-1)*1000)/10)}%)</small>`:(r.fv?"대조 불가":"미확인");
+  return `<tr><td class="reg">${cityOf(r)} ${guOf(r)}</td><td class="name">${mapLink(r)}</td><td>${r.py}</td>
+  <td>${r.floor||"-"}${r.fv?" ⚠":""}</td><td>${r.price0.toFixed(1)}</td><td class="price">${r.price.toFixed(1)}</td>
+  <td>${r.days}일</td><td>${r.gone_date.slice(5)}</td><td>${sold}</td></tr>`;
+}
+
+// ---------- 추이 (꺾은선 + 7일 비교표) ----------
+const METRICS=[["m","급매 건수","s"],["pct","급매 비중(%)","s"],["t","전체 매물","s"],["p","평당 호가(만원)","s"],["n","신규","f"],["x","소멸","f"],["u","호가 인하","f"]];
+const GRAN=[["d","일"],["w","주"],["m","월"]];
+const PAL=["#0f7f78","#e4572e","#3b6fd1","#c28f00","#8e4fc7","#2a9d3f","#d4568a","#6b7b80"];
+function aggAt(date,key){
+  const o=DAILY[date]||{};let a={m:0,t:0,s:0,n:0,x:0,u:0,pw:0},has=false;
+  for(const g in o){const v=o[g];if(key[0]==="@"?v.c!==key.slice(1):g!==key)continue;has=true;
+    a.m+=v.m;a.t+=v.t;a.s+=v.s;a.n+=v.n;a.x+=v.x;a.u+=v.u;a.pw+=(v.p||0)*v.m}
+  if(!has)return null;a.p=a.m?Math.round(a.pw/a.m):0;a.pct=a.t?Math.round(a.m/a.t*1000)/10:0;return a;
+}
+function bucket(d){
+  if(T.gran==="m")return d.slice(0,7);
+  if(T.gran==="w"){const t=new Date(d);t.setUTCDate(t.getUTCDate()-((t.getUTCDay()+6)%7));return t.toISOString().slice(0,10)}
+  return d;
+}
+function chartSvg(dates){
+  const mt=METRICS.find(m=>m[0]===T.metric),flow=mt[2]==="f";
+  const bks=[...new Set(dates.map(bucket))];
+  const series=[...T.sel].map(key=>({key,pts:bks.map(b=>{
+    const ds=dates.filter(d=>bucket(d)===b);
+    if(flow)return ds.reduce((s,d)=>s+((aggAt(d,key)||{})[T.metric]||0),0);
+    for(let i=ds.length-1;i>=0;i--){const a=aggAt(ds[i],key);if(a)return a[T.metric]}return null})}));
+  const vals=series.flatMap(s=>s.pts).filter(v=>v!=null);
+  if(!vals.length)return'<div class="empty">표시할 계열을 선택하세요.</div>';
+  const W=760,H=300,L=52,R=12,Tp=12,B=28;
+  let lo=Math.min(...vals),hi=Math.max(...vals);
+  if(["m","t","n","x","u"].includes(T.metric))lo=0;
+  if(hi===lo)hi=lo+1;const pad=(hi-lo)*0.08;if(lo!==0)lo-=pad;hi+=pad;
+  const X=i=>bks.length<2?(L+W-R)/2:L+(W-L-R)*i/(bks.length-1),Y=v=>Tp+(H-Tp-B)*(1-(v-lo)/(hi-lo));
+  let g="";
+  for(let i=0;i<=4;i++){const v=lo+(hi-lo)*i/4;g+=`<line x1="${L}" x2="${W-R}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--line)"/><text x="${L-6}" y="${Y(v)+4}" text-anchor="end">${Math.round(v*10)/10}</text>`}
+  const step=Math.max(1,Math.ceil(bks.length/6));
+  bks.forEach((b,i)=>{if(i%step===0||i===bks.length-1)g+=`<text x="${X(i)}" y="${H-8}" text-anchor="middle">${T.gran==="m"?b:b.slice(5)}</text>`});
+  series.forEach((s,si)=>{
+    const col=PAL[si%PAL.length],pts=s.pts.map((v,i)=>v==null?null:[X(i),Y(v),v,bks[i]]).filter(Boolean);
+    g+=`<polyline fill="none" stroke="${col}" stroke-width="2.5" points="${pts.map(p=>p[0]+","+p[1]).join(" ")}"/>`;
+    if(pts.length<=45)g+=pts.map(p=>`<circle cx="${p[0]}" cy="${p[1]}" r="3.5" fill="${col}"><title>${s.key.replace("@","")} ${p[3]}: ${p[2]}</title></circle>`).join("");
+  });
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img">${g}</svg>`;
+}
+function renderTrend(){
+  const el=$("vtrend"),dates=DAILY?Object.keys(DAILY).sort():[];
+  if(!dates.length){el.innerHTML='<div class="empty">추이 데이터(history/daily.json)가 아직 없어요. 수집이 하루 이상 쌓이면 보여요.</div>';return}
+  const last=dates[dates.length-1],keys=Object.keys(DAILY[last]);
+  if(!T.sel)T.sel=new Set([...keys].sort((a,b)=>DAILY[last][b].m-DAILY[last][a].m).slice(0,5));
+  const colorOf=k=>{const i=[...T.sel].indexOf(k);return i<0?null:PAL[i%PAL.length]};
+  const all=[...new Set(keys.map(k=>"@"+DAILY[last][k].c)),...[...keys].sort()];
+  const chips=all.map(k=>{const c=colorOf(k);return `<button class="chip tab" data-k="${k}" style="${c?`border-color:${c};color:${c};font-weight:700`:""}">${k[0]==="@"?k.slice(1)+" 전체":k}</button>`}).join("");
+  const t=new Date(last);t.setUTCDate(t.getUTCDate()-7);const k7=t.toISOString().slice(0,10);
+  const base=[...dates].reverse().find(d=>d<=k7)||dates[0],win=dates.filter(d=>d>base);
+  const rows=keys.map(g=>{const a=DAILY[last][g],b=(DAILY[base]||{})[g],ok=b&&base!==last;
+    const sum=f=>win.reduce((s,d)=>s+(((DAILY[d]||{})[g]||{})[f]||0),0);
+    return{g,m:a.m,b:b?b.m:null,d:ok?a.m-b.m:null,pct:a.t?Math.round(a.m/a.t*1000)/10:null,tt:ok?a.t-b.t:null,n:sum("n"),x:sum("x"),u:sum("u"),p:a.p,
+      warn:b&&Math.abs(a.s-b.s)>Math.max(2,b.s*0.1)}}).sort((p,q)=>(q.d??-999)-(p.d??-999));
+  el.innerHTML=`<div class="tabs">${METRICS.map(m=>`<button class="tab ${m[0]===T.metric?"on":""}" data-t="${m[0]}">${m[1]}</button>`).join("")}</div>
+  <div class="tabs">${GRAN.map(g=>`<button class="tab ${g[0]===T.gran?"on":""}" data-g="${g[0]}">${g[1]} 단위</button>`).join("")}</div>
+  ${chartSvg(dates)}
+  <div class="tabs">${chips}</div>
+  <div class="msg">${last} 기준 · 비교: ${base} (${win.length}일) · 증감 큰 순 · 급매 비중 = 급매 ÷ 전체 매물</div>
+  <div class="scroll"><table><thead><tr><th>지역</th><th>급매</th><th>${base.slice(5)}</th><th>증감</th><th>급매 비중</th><th>전체매물 증감</th><th>신규</th><th>소멸</th><th>인하</th><th>평당 호가(만)</th></tr></thead><tbody>`+
+  rows.map(r=>`<tr><td class="reg">${r.g}${r.warn?" ⚠":""}</td><td>${r.m}</td><td>${r.b??"-"}</td><td class="price">${sg(r.d)}</td><td>${r.pct==null?"-":r.pct+"%"}</td><td>${sg(r.tt)}</td><td>${r.n}</td><td>${r.x}</td><td class="down">${r.u}</td><td>${r.p?r.p.toLocaleString():"-"}</td></tr>`).join("")+"</tbody></table></div>";
+  el.querySelectorAll("[data-t]").forEach(b=>b.onclick=()=>{T.metric=b.dataset.t;render()});
+  el.querySelectorAll("[data-g]").forEach(b=>b.onclick=()=>{T.gran=b.dataset.g;render()});
+  el.querySelectorAll("[data-k]").forEach(b=>b.onclick=()=>{const k=b.dataset.k;T.sel.has(k)?T.sel.delete(k):T.sel.add(k);render()});
+}
+
+// ---------- 데이터 로딩 ----------
+async function loadDaily(){
+  try{const r=await fetch($("src").value.replace(/data\.json.*$/,"history/daily.json")+"?t="+Date.now(),{cache:"no-store"});
+    if(!r.ok)throw 0;DAILY=await r.json()}catch(e){DAILY=null}
+}
+function setData(d){if(!d||!Array.isArray(d.items))throw new Error("형식 오류: items 배열이 필요합니다");DATA=d;render()}
 async function refresh(){
   $("msg").textContent="불러오는 중…";
   try{
-    const res=await fetch($("src").value+(($("src").value.includes("?")?"&":"?")+"t="+Date.now()),{cache:"no-store"});
+    const res=await fetch($("src").value+"?t="+Date.now(),{cache:"no-store"});
     if(!res.ok)throw new Error("HTTP "+res.status);
-    setData(await res.json());
+    setData(await res.json());await loadDaily();render();
     $("msg").textContent="리프레시 완료 ("+DATA.items.length+"건)";
-  }catch(e){
-    $("msg").textContent="리프레시 실패: "+e.message+" — 브라우저는 보안상 로컬 파일(file://)에서 data.json을 못 읽을 수 있어요. 'JSON 불러오기'를 쓰거나 간단한 웹서버로 열어주세요.";
-  }
+  }catch(e){$("msg").textContent="리프레시 실패: "+e.message+" — 로컬 파일(file://)로 열면 막힐 수 있어요. 'JSON 불러오기'를 쓰거나 웹 주소로 여세요."}
 }
+// ---------- 이벤트 (위임) ----------
+document.addEventListener("click",e=>{
+  const b=e.target.closest("button,th");if(!b)return;const d=b.dataset;
+  if(d.m){mode=d.m;if(mode==="trend"&&!DAILY)loadDaily().then(render);render()}
+  else if(d.i!==undefined){tab=+d.i;render()}
+  else if(d.b!==undefined){band=+d.b;render()}
+  else if(d.c){chgF=d.c;if(chgF=="down"||chgF=="up"){S.list={k:"dpct",d:chgF=="down"?1:-1}}render()}
+  else if(d.s){soldF=d.s;render()}
+  else if(d.k&&b.tagName==="TH"){const s=S[mode];s.d=s.k==d.k?-s.d:1;s.k=d.k;render()}
+});
 $("refresh").onclick=refresh;
-$("city").onchange=()=>{$("reg").value="전체";render()};
-$("reg").onchange=render;
+$("city").onchange=e=>{cc=e.target.value;cg="전체";render()};
+$("reg").onchange=e=>{cg=e.target.value;render()};
 $("pick").onclick=()=>$("file").click();
-$("file").onchange=async e=>{
-  try{setData(JSON.parse(await e.target.files[0].text()));$("msg").textContent="파일에서 불러오기 완료"}
-  catch(err){$("msg").textContent="불러오기 실패: "+err.message}
-};
-$("msg").textContent="현재 표시 중인 건 샘플 데이터입니다. 실제 호가 데이터(data.json)를 연결하면 리프레시로 갱신돼요.";
+$("file").onchange=async e=>{try{setData(JSON.parse(await e.target.files[0].text()));$("msg").textContent="파일에서 불러오기 완료"}catch(err){$("msg").textContent="불러오기 실패: "+err.message}};
+$("msg").textContent="현재는 샘플 데이터입니다. 리프레시를 누르면 data.json을 읽어 옵니다.";
 render();
 </script>
 </body>
