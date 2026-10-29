@@ -29,6 +29,13 @@ td.reg{font-weight:700;color:var(--pri)}td.price{font-size:17px;font-weight:800;
 .empty{padding:30px;text-align:center;color:var(--sub)}
 .chip{border-width:2px;font-size:13px;padding:5px 10px}
 svg text{fill:var(--sub);font-size:11px}
+summary{cursor:pointer;margin:8px 0;font-size:14px}
+#pop{position:absolute;z-index:20;width:240px;background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:0 6px 24px #0004;padding:10px}
+.phd{display:flex;justify-content:space-between;align-items:center}
+#psearch{width:100%;margin:6px 0;padding:6px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--tx);font:inherit}
+#plist{max-height:240px;overflow:auto;font-size:13px;margin-top:6px;text-align:left}
+#plist label{display:flex;gap:6px;padding:4px 2px;align-items:center}
+.fbtn{margin-left:2px;padding:4px 8px;opacity:.6}.fbtn.on{color:var(--pri);opacity:1;font-weight:900}
 </style>
 </head>
 <body>
@@ -45,7 +52,8 @@ svg text{fill:var(--sub);font-size:11px}
     </div>
   </div>
   <div id="filters">
-    <div class="bar"><span>지역</span><select id="city"></select><select id="reg"></select><span id="upd"></span>
+    <details id="regbox"><summary id="regsum">지역: 전체</summary><div class="tabs" id="regchips"></div></details>
+    <div class="bar"><span id="upd"></span>
       <input type="text" id="src" value="data.json" hidden></div>
     <div class="tabs" id="tabs"></div>
     <div class="tabs" id="bands"></div>
@@ -55,6 +63,12 @@ svg text{fill:var(--sub);font-size:11px}
   <div class="scroll" id="vtable"><table><thead><tr id="thead"></tr></thead><tbody id="tbody"></tbody></table></div>
   <div id="vtrend" hidden></div>
   <p class="note" id="note"></p>
+</div>
+<div id="pop" hidden>
+  <div class="phd"><b id="ptitle"></b><button data-pclose="1">✕</button></div>
+  <input type="text" id="psearch" placeholder="값 검색">
+  <div class="tabs"><button data-pall="1">모두 선택</button><button data-pnone="1">모두 해제</button></div>
+  <div id="plist"></div>
 </div>
 <script>
 // 샘플 데이터 (실제 data.json 이 읽히면 대체됩니다)
@@ -74,9 +88,16 @@ const NOTE={
  list:"※ 같은 호실 판별의 한계: 층이 ‘저/중/고’처럼 뭉뚱그려 표시된 매물은 같은 단지·동·면적의 다른 호실과 합쳐질 수 있어요. 이런 매물(⚠)은 최초 포착일과 호가 변동이 부정확할 수 있습니다. 급매 수 = 같은 단지·평형의 급매 호실 수. 호가 변동 = 최초 포착 호가 대비 현재 호가. 거리 = 가장 가까운 지하철역까지 직선거리.",
  gone:"※ 소멸은 ‘매매 완료’가 아니라 매물이 내려갔거나 급매 표시가 빠진 것입니다. 실거래 대조는 국토부 신고 자료를 단지·동·전용면적·층·계약일(최초 포착일 이후)로 맞춰 본 추정이에요. 신고는 계약 후 최대 30일 늦게 올라오고, 층이 불명확한(⚠) 매물은 대조할 수 없습니다.",
  trend:"※ 스캔한 단지 범위가 같을 때만 비교가 정확해요(⚠ = 범위가 달라짐). 소멸은 매매 완료가 아닙니다. 주·월 단위는 신규·소멸·인하는 합계, 나머지는 기간 마지막 날 값입니다."};
-let mode="list",tab=0,band=0,chgF="all",soldF="all",cc="전체",cg="전체",DAILY=null;
+let mode="list",tab=0,band=0,chgF="all",soldF="all",regSel=new Set(),DAILY=null,LASTBASE=[],POPC=null;
 const S={list:{k:"price",d:1},gone:{k:"gone_date",d:-1}};
 const T={metric:"m",gran:"d",sel:null};
+const TS={k:"d",d:-1};
+const FILT={price:{lb:"호가(억)",f:v=>v.toFixed(1)},prev:{lb:"직전 매매가",f:v=>v.toFixed(1)},units:{lb:"세대수",f:v=>v.toLocaleString()}};
+const COLF={};
+const fkey=(r,c)=>r[c]==null?"∅":String(r[c]);
+const passCols=(r,skip)=>Object.keys(COLF).every(c=>c===skip||COLF[c].has(fkey(r,c)));
+const regLb=k=>k[0]==="@"?k.slice(1)+" 전체":k;
+const rkeyMatch=r=>!regSel.size||regSel.has("@"+cityOf(r))||regSel.has(cityOf(r)+" "+guOf(r));
 
 const cityOf=r=>r.city||((r.region||"").startsWith("성남")?"성남":(r.region||"").startsWith("하남")?"하남":r.region==="위례"?"위례":"서울");
 const guOf=r=>r.gu||(r.region||"").replace(/^성남\s*/,"");
@@ -97,17 +118,15 @@ function render(){
   $("filters").hidden=tr;$("vtable").hidden=tr;$("vtrend").hidden=!tr;
   if(tr){renderTrend();return}
   const rows0=src();
-  const cities=["전체",...["서울","성남","하남","위례"].filter(c=>rows0.some(r=>cityOf(r)==c))];
-  cc=cities.includes(cc)?cc:"전체";
-  $("city").innerHTML=cities.map(x=>`<option ${x==cc?"selected":""}>${x}</option>`).join("");
-  const gus=["전체",...new Set(rows0.filter(r=>cc=="전체"||cityOf(r)==cc).map(guOf))];
-  cg=gus.includes(cg)?cg:"전체";
-  $("reg").innerHTML=gus.map(x=>`<option ${x==cg?"selected":""}>${x}</option>`).join("");
+  const keys=["서울","성남","하남","위례"].filter(c=>rows0.some(r=>cityOf(r)==c)).flatMap(c=>["@"+c,...[...new Set(rows0.filter(r=>cityOf(r)==c).map(guOf))].sort().map(g=>c+" "+g)]);
+  $("regchips").innerHTML=keys.map(k=>`<button class="tab ${regSel.has(k)?"on":""}" data-r="${k}">${regLb(k)}</button>`).join("")+(regSel.size?`<button class="tab" data-rclr="1">지역 초기화</button>`:"");
+  $("regsum").textContent="지역: "+(regSel.size?[...regSel].map(regLb).join(", "):"전체")+"  ▾";
   $("tabs").innerHTML=btns(TABS.map((t,i)=>[i,t[0]]),tab,"i");
   $("bands").innerHTML=btns(BANDS.map((t,i)=>[i,t[0]]),band,"b");
-  $("extra").innerHTML=mode==="list"?btns(CHG,chgF,"c"):btns(SOLD,soldF,"s");
+  const nf=Object.keys(COLF).length;
+  $("extra").innerHTML=mode==="list"?btns(CHG,chgF,"c")+(nf?`<button class="tab" data-fclr="1">열 필터 해제 (${nf})</button>`:""):btns(SOLD,soldF,"s");
   const [,lo,hi]=TABS[tab],[,pl,ph]=BANDS[band],upd=(DATA.updated||"").slice(0,10);
-  let rows=rows0.filter(r=>r.py>=lo&&r.py<hi&&r.price>=pl&&r.price<ph&&(cc=="전체"||cityOf(r)==cc)&&(cg=="전체"||guOf(r)==cg));
+  let rows=rows0.filter(r=>r.py>=lo&&r.py<hi&&r.price>=pl&&r.price<ph&&rkeyMatch(r));
   if(mode==="list"){
     rows=rows.map(r=>({...r,chg:chgPct(r),dpct:r.price0?Math.round((r.price/r.price0-1)*1000)/10:null,
       lastch:r.ph&&r.ph.length>1?r.ph[r.ph.length-1][0]:null}))
@@ -116,11 +135,37 @@ function render(){
     rows=rows.map(r=>({...r,days:dayDiff(r.first_seen,r.gone_date),soldamt:r.sold?r.sold.amt:null}))
      .filter(r=>soldF=="all"||(soldF=="yes"&&r.sold)||(soldF=="no"&&!r.sold));
   }
+  LASTBASE=rows;
+  if(mode==="list")rows=rows.filter(r=>passCols(r));
   const cols=COLS[mode],s=S[mode];
-  $("thead").innerHTML=cols.map(c=>`<th data-k="${c[0]}">${c[1]}${s.k==c[0]?(s.d>0?" ▲":" ▼"):""}</th>`).join("");
+  $("thead").innerHTML=cols.map(c=>`<th data-k="${c[0]}">${c[1]}${s.k==c[0]?(s.d>0?" ▲":" ▼"):""}${mode==="list"&&FILT[c[0]]?`<span class="fbtn ${COLF[c[0]]?"on":""}" data-f="${c[0]}" title="값으로 거르기">${COLF[c[0]]?"●":"▾"}</span>`:""}</th>`).join("");
   sorted(rows);
   $("tbody").innerHTML=rows.length?rows.map(mode==="list"?rowList:rowGone).join(""):`<tr><td colspan="${cols.length}" class="empty">조건에 맞는 매물이 없습니다.</td></tr>`;
   $("upd").textContent="갱신: "+DATA.updated;
+  if(POPC&&!$("pop").hidden)fillPop();
+}
+// ---------- 열 필터 팝업 (엑셀식 체크박스) ----------
+function popValues(){
+  const m=new Map();
+  LASTBASE.filter(r=>passCols(r,POPC)).forEach(r=>{const k=fkey(r,POPC),e=m.get(k)||{k,v:r[POPC],n:0};e.n++;m.set(k,e)});
+  return [...m.values()].sort((a,b)=>a.v==null?1:b.v==null?-1:a.v-b.v);
+}
+function fillPop(){
+  const c=POPC,q=$("psearch").value.trim();
+  $("ptitle").textContent=FILT[c].lb+" 값 필터";
+  $("plist").innerHTML=popValues().filter(e=>!q||(e.v==null?"(없음)":FILT[c].f(e.v)).includes(q)).map(e=>
+    `<label><input type="checkbox" data-v="${e.k}" ${!COLF[c]||COLF[c].has(e.k)?"checked":""}> ${e.v==null?"(없음)":FILT[c].f(e.v)} <small>(${e.n})</small></label>`).join("")||'<div class="empty">값이 없습니다</div>';
+}
+function openPop(c,rect){
+  POPC=c;$("psearch").value="";const p=$("pop");p.hidden=false;
+  p.style.left=Math.max(4,Math.min(rect.left,window.innerWidth-250))+"px";p.style.top=(rect.bottom+(window.scrollY||0)+4)+"px";fillPop();
+}
+function toggleVal(k,on){
+  const c=POPC,all=popValues().map(e=>e.k);
+  if(!COLF[c])COLF[c]=new Set(all);
+  on?COLF[c].add(k):COLF[c].delete(k);
+  if(all.every(x=>COLF[c].has(x)))delete COLF[c];
+  render();
 }
 function rowList(r){
   const hist=(r.ph||[]).map(p=>p[0]+" "+p[1].toFixed(1)).join(" → ");
@@ -192,14 +237,17 @@ function renderTrend(){
   const rows=keys.map(g=>{const a=DAILY[last][g],b=(DAILY[base]||{})[g],ok=b&&base!==last;
     const sum=f=>win.reduce((s,d)=>s+(((DAILY[d]||{})[g]||{})[f]||0),0);
     return{g,m:a.m,b:b?b.m:null,d:ok?a.m-b.m:null,pct:a.t?Math.round(a.m/a.t*1000)/10:null,tt:ok?a.t-b.t:null,n:sum("n"),x:sum("x"),u:sum("u"),p:a.p,
-      warn:b&&Math.abs(a.s-b.s)>Math.max(2,b.s*0.1)}}).sort((p,q)=>(q.d??-999)-(p.d??-999));
+      warn:b&&Math.abs(a.s-b.s)>Math.max(2,b.s*0.1)}});
+  rows.sort((p,q)=>{const x=p[TS.k],y=q[TS.k];if(x==null)return 1;if(y==null)return -1;return(typeof x=="string"?x.localeCompare(y,"ko"):x-y)*TS.d});
+  const TC=[["g","지역"],["m","급매"],["b",base.slice(5)],["d","증감"],["pct","급매 비중"],["tt","전체매물 증감"],["n","신규"],["x","소멸"],["u","인하"],["p","평당 호가(만)"]];
   el.innerHTML=`<div class="tabs">${METRICS.map(m=>`<button class="tab ${m[0]===T.metric?"on":""}" data-t="${m[0]}">${m[1]}</button>`).join("")}</div>
   <div class="tabs">${GRAN.map(g=>`<button class="tab ${g[0]===T.gran?"on":""}" data-g="${g[0]}">${g[1]} 단위</button>`).join("")}</div>
   ${chartSvg(dates)}
   <div class="tabs">${chips}</div>
   <div class="msg">${last} 기준 · 비교: ${base} (${win.length}일) · 증감 큰 순 · 급매 비중 = 급매 ÷ 전체 매물</div>
-  <div class="scroll"><table><thead><tr><th>지역</th><th>급매</th><th>${base.slice(5)}</th><th>증감</th><th>급매 비중</th><th>전체매물 증감</th><th>신규</th><th>소멸</th><th>인하</th><th>평당 호가(만)</th></tr></thead><tbody>`+
+  <div class="scroll"><table><thead><tr>${TC.map(c=>`<th data-tk="${c[0]}">${c[1]}${TS.k===c[0]?(TS.d>0?" ▲":" ▼"):""}</th>`).join("")}</tr></thead><tbody>`+
   rows.map(r=>`<tr><td class="reg">${r.g}${r.warn?" ⚠":""}</td><td>${r.m}</td><td>${r.b??"-"}</td><td class="price">${sg(r.d)}</td><td>${r.pct==null?"-":r.pct+"%"}</td><td>${sg(r.tt)}</td><td>${r.n}</td><td>${r.x}</td><td class="down">${r.u}</td><td>${r.p?r.p.toLocaleString():"-"}</td></tr>`).join("")+"</tbody></table></div>";
+  el.querySelectorAll("[data-tk]").forEach(th=>th.onclick=()=>{const k=th.dataset.tk;TS.d=TS.k===k?-TS.d:(k==="g"?1:-1);TS.k=k;render()});
   el.querySelectorAll("[data-t]").forEach(b=>b.onclick=()=>{T.metric=b.dataset.t;render()});
   el.querySelectorAll("[data-g]").forEach(b=>b.onclick=()=>{T.gran=b.dataset.g;render()});
   el.querySelectorAll("[data-k]").forEach(b=>b.onclick=()=>{const k=b.dataset.k;T.sel.has(k)?T.sel.delete(k):T.sel.add(k);render()});
@@ -222,7 +270,16 @@ async function refresh(){
 }
 // ---------- 이벤트 (위임) ----------
 document.addEventListener("click",e=>{
+  const f=e.target.closest(".fbtn");
+  if(f){openPop(f.dataset.f,f.getBoundingClientRect());return}
+  if(!e.target.closest("#pop"))$("pop").hidden=true;
   const b=e.target.closest("button,th");if(!b)return;const d=b.dataset;
+  if(d.pclose){$("pop").hidden=true;return}
+  if(d.pall){delete COLF[POPC];render();return}
+  if(d.pnone){COLF[POPC]=new Set();render();return}
+  if(d.r){regSel.has(d.r)?regSel.delete(d.r):regSel.add(d.r);render();return}
+  if(d.rclr){regSel.clear();render();return}
+  if(d.fclr){for(const k in COLF)delete COLF[k];render();return}
   if(d.m){mode=d.m;if(mode==="trend"&&!DAILY)loadDaily().then(render);render()}
   else if(d.i!==undefined){tab=+d.i;render()}
   else if(d.b!==undefined){band=+d.b;render()}
@@ -231,8 +288,8 @@ document.addEventListener("click",e=>{
   else if(d.k&&b.tagName==="TH"){const s=S[mode];s.d=s.k==d.k?-s.d:1;s.k=d.k;render()}
 });
 $("refresh").onclick=refresh;
-$("city").onchange=e=>{cc=e.target.value;cg="전체";render()};
-$("reg").onchange=e=>{cg=e.target.value;render()};
+document.addEventListener("change",e=>{if(e.target.dataset&&e.target.dataset.v!==undefined)toggleVal(e.target.dataset.v,e.target.checked)});
+$("psearch").oninput=fillPop;
 $("pick").onclick=()=>$("file").click();
 $("file").onchange=async e=>{try{setData(JSON.parse(await e.target.files[0].text()));$("msg").textContent="파일에서 불러오기 완료"}catch(err){$("msg").textContent="불러오기 실패: "+err.message}};
 $("msg").textContent="현재는 샘플 데이터입니다. 리프레시를 누르면 data.json을 읽어 옵니다.";
