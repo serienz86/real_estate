@@ -289,7 +289,7 @@ def main():
     for lst in grp.values():
         u = min(lst, key=lambda u: u["ph"][-1][1])
         price = u["ph"][-1][1]
-        items.append(dict(region=u["region"], city=u["city"], gu=u["gu"], dong=u["dong"], age=u["age"], name=u["name"],
+        items.append(dict(cno=u["cno"], region=u["region"], city=u["city"], gu=u["gu"], dong=u["dong"], age=u["age"], name=u["name"],
             py=u["py"], price=price, prev=None, prev_date=None, units=u["households"], subway=u["subway"],
             dist_m=u["dist_m"], n=len(lst), fv=int(any(floor_no(x.get("floor")) is None for x in lst)),
             floor=u.get("floor", ""), first_seen=u["first_seen"], price0=u["first_price"],
@@ -308,7 +308,7 @@ def main():
     for r in items:
         r.pop("_excl", None); r.pop("_lawd", None)
     gcut = (dt.date.fromisoformat(today) - dt.timedelta(days=SOLD_WINDOW)).isoformat()
-    gone = [dict(region=u["region"], city=u["city"], gu=u["gu"], name=u["name"], py=u["py"], floor=u.get("floor", ""),
+    gone = [dict(cno=u["cno"], region=u["region"], city=u["city"], gu=u["gu"], name=u["name"], py=u["py"], floor=u.get("floor", ""),
                  fv=0 if floor_no(u.get("floor")) is not None else 1, first_seen=u["first_seen"], gone_date=u["gone_date"],
                  price0=u["first_price"], price=u["ph"][-1][1], sold=u.get("sold"))
             for u in units.values() if not u["active"] and (u["gone_date"] or "") >= gcut]
