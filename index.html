@@ -103,7 +103,12 @@ const cityOf=r=>r.city||((r.region||"").startsWith("성남")?"성남":(r.region|
 const guOf=r=>r.gu||(r.region||"").replace(/^성남\s*/,"");
 const dayDiff=(a,b)=>Math.round((new Date(b)-new Date(a))/864e5);
 const sg=v=>v==null?"-":(v>0?"+":"")+v;
-function mapLink(r){return `<a href="https://map.naver.com/p/search/${encodeURIComponent(r.name)}%20${encodeURIComponent(guOf(r)||cityOf(r))}" target="_blank" rel="noopener">${r.name}</a>`}
+function mapLink(r){
+  // 네이버 부동산 단지 페이지(매매 목록). 단지번호(cno)가 없는 옛 데이터는 네이버지도 검색 링크로 대체
+  const url=r.cno?`https://new.land.naver.com/complexes/${r.cno}?a=APT&b=A1&e=RETAIL`
+    :`https://map.naver.com/p/search/${encodeURIComponent(r.name)}%20${encodeURIComponent(guOf(r)||cityOf(r))}`;
+  return `<a href="${url}" target="_blank" rel="noopener">${r.name}</a>`;
+}
 const chgPct=r=>r.prev?Math.round((r.price/r.prev-1)*100):null;
 const dist=r=>r.dist_m==null?"-":(r.subway?r.subway+" ":"")+(r.dist_m>=1000?(r.dist_m/1000).toFixed(2)+"km":r.dist_m+"m");
 
